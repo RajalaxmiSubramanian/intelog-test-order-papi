@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:munit="http://www.mulesoft.org/schema/mule/munit"
+      xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+                          http://www.mulesoft.org/schema/mule/munit-tools http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+
+    <munit:config name="revenue-processing-scheduler-can-main-flow-test-suite"/>
+
+    <munit:test name="revenue-processing-scheduler-can-main-flow-success-test" description="Test Revenue Processing - Shopify CAN - Main happy path">
+        <munit:behavior>
+            <munit:set-event doc:name="Set Test Input">
+                <munit:payload value="#[{}]" mediaType="application/json"/>
+            </munit:set-event>
+        </munit:behavior>
+        <munit:execution>
+            <flow-ref name="revenue-processing-scheduler-can-main-flow-flow"/>
+        </munit:execution>
+        <munit:validation>
+            <munit-tools:assert-that expression="#[payload.success]" is="#[MunitTools::equalTo(true)]"/>
+        </munit:validation>
+    </munit:test>
+
+    <munit:test name="revenue-processing-scheduler-can-main-flow-error-test" description="Test Revenue Processing - Shopify CAN - Main error handling" expectedErrorType="ANY">
+        <munit:behavior>
+            <munit:set-event doc:name="Set Invalid Input">
+                <munit:payload value="#[null]" mediaType="application/json"/>
+            </munit:set-event>
+        </munit:behavior>
+        <munit:execution>
+            <flow-ref name="revenue-processing-scheduler-can-main-flow-flow"/>
+        </munit:execution>
+    </munit:test>
+
+</mule>

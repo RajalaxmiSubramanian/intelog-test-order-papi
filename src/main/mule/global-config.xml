@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:salesforce-composite="http://www.mulesoft.org/schema/mule/salesforce-composite"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+      xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd">
+
+    
+    <configuration-properties file="properties/config-${env}.yaml"/>
+
+    <http:listener-config name="httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="${http.public.port}" readTimeout="${http.readTimeout}" connectionIdleTimeout="${https.connectionIdleTimeoutInMilliseconds}"/>
+    </http:listener-config>
+    <http:request-config name="shopifyCANHttpConfig" basePath="${shopify.can.basepath}" responseTimeout="${shopify.can.responseTimeoutInMilliseconds}">
+        <http:request-connection host="${shopify.can.host}" protocol="HTTPS" connectionIdleTimeout="${shopify.can.connectionTimeoutInMilliseconds}">
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+        </http:request-connection>
+    </http:request-config>
+     <http:request-config name="shopifyUSAHttpConfig" basePath="${shopify.usa.basepath}" responseTimeout="${shopify.usa.responseTimeoutInMilliseconds}">
+        <http:request-connection host="${shopify.usa.host}" port="${shopify.usa.port}" protocol="HTTPS" connectionIdleTimeout="${shopify.usa.connectionTimeoutInMilliseconds}">
+			<tls:context >
+				<tls:trust-store insecure="true" />
+			</tls:context>
+        </http:request-connection>
+    </http:request-config>
+    
+    <os:object-store name="Object_Store"
+                 maxEntries="1000" entryTtl="30" entryTtlUnit="DAYS"/>
+                 <http:request-config name="salesforceSAPIConfig" basePath="${salesforce.sapi.basePath}">
+    <http:request-connection host="${salesforce.sapi.host}" port="${salesforce.sapi.port}">
+     
+        </http:request-connection>
+</http:request-config>
+	<configuration-properties doc:name="propertiesConfig" doc:id="05cd172a-9f56-41e0-96d5-44e39c2eb218" file="properties/common.yaml" />
+	<secure-properties:config name="securePropertiesConfig" doc:name="Secure Properties Config" doc:id="1afac52a-0780-4827-8054-c0f1f9d8bce4" file="properties/config-secure-${env}.yaml" key="${encryption.key}"/>
+	
+	<vm:config name="VMConfigOrder">
+    <vm:queues>
+        <vm:queue queueName="OrderQueue"/>
+        <vm:queue queueName="EnrichedOrderQueue"/>
+        <vm:queue queueName="ijm-error-queue"/>
+    </vm:queues>
+</vm:config>
+
+
+<http:request-config name="salesforceRequestConfiguration" doc:name="HTTP Request configuration" doc:id="29630fb6-2aec-4998-a17b-503b0891d35a" >
+		<http:request-connection host="orgfarm-8d762fe6ea-dev-ed.develop.my.salesforce.com" port="443" protocol="HTTPS"/>
+	</http:request-config>
+	
+	
+</mule>

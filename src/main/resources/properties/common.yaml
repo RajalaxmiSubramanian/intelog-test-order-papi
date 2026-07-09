@@ -1,0 +1,54 @@
+api:
+  name: "ijm-order-processing-papi"
+
+environment: p("env")
+https:
+   path: "/api/v1/*"
+   port: "8082"
+   readTimeout: "30000"
+   connectionIdleTimeoutInMilliseconds: "40000"
+   
+http:
+   public:
+     port: "8081"
+   private:
+     port: "8092"
+   readTimeout: ""
+   method:
+      post: "POST"
+      get: "GET"
+      put: "PUT"
+      patch: "PATCH"
+      delete: "DELETE"
+scheduler:
+  gau:
+    load:
+      cron:
+        expression: "0 0 6 * * ?"
+  usa:
+    orders:
+      cron:
+        expression: "0 */10 * * * ?"
+  can:
+    orders:
+      cron:
+        expression: "0 */10 * * * ?"
+shopify:
+  usa:
+    connectionTimeoutInMilliseconds: "50000"
+    responseTimeoutInMilliseconds: "500000"
+  can:
+    connectionTimeoutInMilliseconds: "50000"
+    responseTimeoutInMilliseconds: "500000"
+  query:
+    item:
+      limit: "25"
+      financialStatus: "paid"
+salesforce:
+  api:
+    gaus:
+      path: "gaus"
+    compositeRequest:
+      path: "compositeRequest"
+    sObjects:
+      path: "sfObjects"

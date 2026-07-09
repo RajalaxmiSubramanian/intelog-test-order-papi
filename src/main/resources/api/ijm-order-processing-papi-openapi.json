@@ -1,0 +1,90 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ijm-order-processing-papi API",
+    "version": "1.0.0",
+    "description": "API specification for ijm-order-processing-papi"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8081/api"
+    }
+  ],
+  "paths": {
+    "/revenue-processing-shopify-can-main": {
+      "post": {
+        "summary": "Revenue Processing - Shopify CAN - Main",
+        "description": "Revenue Processing - Shopify CAN - Main endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "correlationId": {
+            "type": "string"
+          },
+          "data": {}
+        }
+      }
+    }
+  }
+}

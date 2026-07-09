@@ -1,0 +1,11 @@
+#Shopify Configuration
+shopify:
+  accessToken: 
+    usa: "![Q56reZvHAmRN0MaFuBeysSZyH0z7IBtItg0jNqMJL0wV2LG7lZAUHKatIKzjyaVE]"
+    can: "![bOmMzwKjpLRovfa3OHPU+kfAHgJk1WezVKQfE4kgX0Q0kW6Ghy7mTzgcYMH1NkcY]"
+    
+#Salesforce Sapi Configuration    
+salesforce:
+  headers:
+    client_id: "![dcvvPpI3P5al6RRMu7cUCw==]"
+    client_secret: "![dcvvPpI3P5al6RRMu7cUCw==]"

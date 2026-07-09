@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+xmlns="http://www.mulesoft.org/schema/mule/core"
+xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+xmlns:http="http://www.mulesoft.org/schema/mule/http"
+xmlns:os="http://www.mulesoft.org/schema/mule/os"
+xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce"
+xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+
+
+	<flow name="load-sf-gau-os-flow" doc:id="ca311a9d-df23-4ca4-a504-748b5bb3c71d" >
+		<scheduler doc:name="GAU Load Scheduler (Daily)" doc:id="da4a613f-0af6-4b2d-844c-b2334ae7bbf6" >
+			<scheduling-strategy >
+				<cron expression="${scheduler.gau.load.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<logger level="INFO"
+            message="#['[FLOW_START] load-sf-gau-os-flow']" doc:name="Log Start"/>
+		<ee:transform doc:name="Set SF Query" doc:id="302da20e-6253-4c5e-9f66-ade6e640c81a" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="queryParams" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  responseFields: "Id,Name,RecordTypeId__c",
+  isActive: true
+}]]></ee:set-variable>
+				<ee:set-variable variableName="path" ><![CDATA[%dw 2.0
+output application/json
+---
+p('salesforce.api.gaus.path')]]></ee:set-variable>
+				<ee:set-variable variableName="httpMethod" ><![CDATA[p('http.method.get')]]></ee:set-variable>
+				<ee:set-variable variableName="correlationId" ><![CDATA[correlationId]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Call Salesforce Sapi Flow Reference" doc:id="e3223663-8322-475c-8fac-48f0fe4b5c6b" name="post-salesforce-request-sub"/>
+		<ee:transform doc:name="Set GAU Responses" doc:id="8fbd349b-f4a4-4977-8454-2da3076b0c8d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+  CANGau: payload filter ($.RecordTypeId__c == p('salesforce.gau.recordTypeId.CAN')),
+  USAGau: payload filter ($.RecordTypeId__c == p('salesforce.gau.recordTypeId.USA'))
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<scatter-gather doc:name="Scatter-Gather for USA and CAN region" doc:id="fb1d8441-2218-457c-8fb8-12259ecc32da" >
+			<route >
+				<os:store doc:name="CAN Object Store" doc:id="52d3f6ca-ce76-415a-960e-a52a9fe3451a" key="CANGau" objectStore="Object_Store">
+					<os:value ><![CDATA[#[payload.CANGau]]]></os:value>
+				</os:store>
+			</route>
+			<route >
+				<os:store doc:name="USA Object Store" doc:id="7c219a38-8cd4-4a93-ab4c-253fd0c70213" key="USAGau" objectStore="Object_Store">
+					<os:value ><![CDATA[#[payload.USAGau]]]></os:value>
+				</os:store>
+			</route>
+		</scatter-gather>
+		<logger level="INFO"
+            message="#['GAU ObjectStore updated successfully']" doc:name="Log End"/>
+	</flow>
+	<flow name="get-usa-shopify-orders-processing-flow" doc:name="Revenue Processing - Shopify USA - Main">
+		<scheduler doc:name="USA Shopify Scheduler" doc:id="3640472b-23d5-4477-b511-e85756cfc289" >
+			<scheduling-strategy >
+				<cron expression="${scheduler.usa.orders.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<!-- [STUDIO:"Listener"]<http:listener doc:name="Listener" doc:id="78cbfa60-af68-4e30-b092-e63f5761ecb7" config-ref="httpListenerConfig" path="/USA"/> [STUDIO] -->
+		<logger level="INFO"
+            doc:name="Log Start"
+            message="#['[FLOW_START] get-usa-shopify-orders-processing-flow | correlationId=' ++ correlationId]"/>
+
+    
+    <ee:transform doc:name="Capture End Execution Time At Start">
+        <ee:message/>
+        <ee:variables>
+            <ee:set-variable variableName="endExecutionTime"><![CDATA[%dw 2.0
+output application/java
+---
+(now() as DateTime {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"})]]></ee:set-variable>
+<ee:set-variable variableName="shopifyStoreFront"><![CDATA["USA"]]></ee:set-variable>
+<ee:set-variable variableName="region"><![CDATA['USA']]></ee:set-variable>
+<ee:set-variable variableName="correlationId"><![CDATA[correlationId]]></ee:set-variable>
+        </ee:variables>
+    </ee:transform>
+
+    
+    <os:retrieve doc:name="Get Last Run Watermark (USA)"
+                 key="shopify.revenue.usa.lastRun"
+                 objectStore="Object_Store"
+                 target="sinceDate">
+        <os:default-value><![CDATA[#[((now() - |PT5M|) as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"})]]]></os:default-value>
+    </os:retrieve>
+
+    <logger level="INFO"
+            doc:name="Log Watermark"
+            message="#['USA Watermark Retrieved | sinceDate=' ++ vars.sinceDate]"/>
+
+    
+
+    <flow-ref name="get-shopify-orders-sub"
+              target="orders"
+              targetValue="#[payload.data.orders]" doc:name="Call: Revenue Processing main query"/>
+		<choice doc:name="Check Orders Present" doc:id="dc40e789-4f8b-4683-9673-08782482bb5d" >
+			<when expression="#[vars.orders != null and vars.orders.edges != null and sizeOf(vars.orders.edges) &gt; 0]">
+				
+				<flow-ref name="get-shopify-products-sub" doc:name="Shopify Order Publish Sub" />
+			
+</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="e874a5c2-62cd-43a6-9ef4-8dff875b20b9" message="#['No orders found for USA']"/>
+			</otherwise>
+		</choice>
+
+    <logger level="INFO"
+            doc:name="Saving Watermark"
+            message="#['Saving new watermark=' ++ vars.endExecutionTime]"/>
+    <os:store doc:name="Save Last Run Watermark (USA)"
+              key="shopify.revenue.usa.lastRun"
+              objectStore="Object_Store">
+        <os:value><![CDATA[#[vars.endExecutionTime]]]></os:value>
+    </os:store>
+		<ee:transform doc:name="Set Response" doc:id="bba4a0aa-e4b3-4780-9853-597d091e5307" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Initiated"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Log End" message="#['[FLOW_END] get-usa-shopify-orders-processing-flow | watermark=' ++ vars.endExecutionTime]" />
+		
+		<error-handler ref="global-error-handler" />
+
+
+</flow>
+
+  
+  <flow name="get-can-shopify-orders-processing-flow" doc:name="Revenue Processing - Shopify CAN - Main">
+		<scheduler doc:name="CAN Shopify Scheduler" doc:id="e3719d8c-f1f6-464e-909f-a36526b7f228" >
+			<scheduling-strategy >
+				<cron expression="${scheduler.can.orders.cron.expression}" />
+			</scheduling-strategy>
+		</scheduler>
+		<!-- [STUDIO:"Listener"]<http:listener doc:name="Listener" doc:id="967854e9-f817-47bd-895e-470b3250b963" config-ref="httpListenerConfig" path="/CAN"/> [STUDIO] -->
+		<logger level="INFO" doc:name="Log Start"
+            message="#['[FLOW_START] get-can-shopify-orders-processing-flow | correlationId=' ++ correlationId]"/>
+
+    
+    <ee:transform doc:name="Capture End Execution Time At Start">
+    <ee:message/>
+    <ee:variables>
+        <ee:set-variable variableName="endExecutionTime"><![CDATA[%dw 2.0
+output application/java
+---
+(now() as DateTime {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"})]]></ee:set-variable>
+<ee:set-variable variableName="shopifyStoreFront"><![CDATA["CAN"]]></ee:set-variable>
+<ee:set-variable variableName="region"><![CDATA['CAN']]></ee:set-variable>
+<ee:set-variable variableName="correlationId"><![CDATA[correlationId]]></ee:set-variable>
+        </ee:variables>
+        
+</ee:transform>
+
+   
+    <os:retrieve doc:name="Get Last Run Watermark (CAN)"
+                 key="shopify.revenue.can.lastRun"
+                 objectStore="Object_Store"
+                 target="sinceDate">
+        <os:default-value><![CDATA[#[((now() - |PT5M|) as String {format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"})]]]></os:default-value>
+    </os:retrieve>
+
+    <logger level="INFO"
+            doc:name="Log Watermark"
+            message="#['CAN Watermark Retrieved | sinceDate=' ++ vars.sinceDate]"/>
+
+  
+    <flow-ref name="get-shopify-orders-sub"
+              target="orders"
+              targetValue="#[payload.data.orders]" doc:name="Call: Revenue Processing main query"/>
+    <choice doc:name="Check Orders Present" doc:id="9c399e37-309e-46ff-8999-d77d1995e928" >
+			<when expression="#[vars.orders != null and vars.orders.edges != null and sizeOf(vars.orders.edges) &gt; 0]">
+				<flow-ref name="get-shopify-products-sub" doc:name="Shopify Order Publish Sub" />
+			
+</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="4b359306-f72c-4aec-be82-0f81b2e44d02" message="#['No orders found for CAN']"/>
+			</otherwise>
+		</choice>
+
+    <logger level="INFO"
+            doc:name="Saving Watermark"
+            message="#['Saving new watermark=' ++ vars.endExecutionTime]"/>
+    <os:store doc:name="Save Last Run Watermark (CAN)"
+              key="shopify.revenue.can.lastRun"
+              objectStore="Object_Store">
+        <os:value><![CDATA[#[vars.endExecutionTime]]]></os:value>
+    </os:store>
+<ee:transform doc:name="Set Response" doc:id="806dcae0-ff62-4ec1-95f4-e22577131660" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"message": "Initiated"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+    <logger level="INFO"
+            doc:name="Log End"
+            message="#['[FLOW_END] get-can-shopify-orders-processing-flow | saved watermark=' ++ vars.endExecutionTime]"/>
+            
+		<error-handler ref="global-error-handler" />
+
+</flow>
+
+  
+  <sub-flow name="get-shopify-products-sub"
+          doc:name="Revenue Processing - Shopify - Sub"
+          doc:id="a3d7a7c1-00c2-4fdc-b087-59212e7e1c1d">
+
+    <logger level="INFO"
+            doc:name="Log Start"
+            message="#['[FLOW_START] get-shopify-products-sub']"/>
+		<foreach collection="#[vars.orders.edges.node]">
+
+			<set-variable value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    "order": (payload update {&#10;        case lineItems at .lineItems -&gt; lineItems.edges.node&#10;        case addresses at .customer.addressesV2 -&gt; addresses.edges.node&#10;    }  )&#10;}]' doc:name="Set Current Order" variableName="currentOrder" />
+			<foreach collection="#[vars.currentOrder.order.lineItems]">
+
+            <set-variable variableName="currentLineItem"
+                          value="#[payload]"
+                          doc:name="Set Current LineItem Variable"/>
+
+            <flow-ref name="get-shopify-product-inventory-varients-sub"
+                      target="productInventoryResponse"
+                      doc:name="Call: Combined Product + Inventory Query"/>
+
+           
+				<set-variable value='#[%dw 2.0&#10;output application/json&#10;var productId = vars.currentLineItem.product.id&#10;var variantId = vars.currentLineItem.variant.id&#10;var productdetails = {"productDetails": (vars.productInventoryResponse.data.product update {&#10;    case variants at .variants -&gt; variants.edges.node filter ($.id == variantId)&#10;    })&#10;}&#10;---&#10;{ "order": vars.currentOrder.order update {&#10;    case lineItems at .lineItems -&gt; &#10;        lineItems map (&#10;            if($.product.id == productId) ($ ++ productdetails)&#10;            else $&#10;            )&#10;    }&#10;}]' doc:name="Set Order-Product Details to current Order" doc:id="e2b783c6-0121-4298-961b-10568208a5ce" variableName="currentOrder"/>
+
+        
+</foreach>
+			<set-variable value="#[%dw 2.0&#10;output application/json&#10;fun removeGid(value) =&#10;    value match {&#10;        case s is String -&gt;&#10;            s replace /gid:\/\/shopify\/[^\/]+\/(\d+)/ with ((groups) -&gt; groups[1])&#10;        case a is Array -&gt;&#10;            a map removeGid($)&#10;        case o is Object -&gt;&#10;            o mapObject ((v, k) -&gt; (k): removeGid(v))&#10;        else -&gt; value&#10;    }&#10;&#10;---&#10;removeGid(vars.currentOrder)]" doc:name="Updated Order-Product Details to current Order" doc:id="c39eea7b-4bb0-4671-94ee-c5f7c9adac4d" variableName="currentOrder"/>
+			<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    order: vars.currentOrder,&#10;    region:vars.region&#10;    &#10;}]' doc:name="Set Queue Payload" doc:id="ba6cea76-1fb0-4eb6-b363-8a799519c246" />
+			<vm:publish doc:name="Publish Order Data" doc:id="f4016dbf-7c20-4ba0-b2eb-5c6bd209b51a" sendCorrelationId="ALWAYS" queueName="OrderQueue" config-ref="VMConfigOrder">
+			</vm:publish>
+
+       
+			<logger level="INFO" doc:name="Log Message" doc:id="f62c3530-1d61-470f-8b13-f108102d82ba" message="#['Order: #[vars.currentOrder.order.id] published to queue successfully']"/>
+
+    </foreach>
+
+    <logger level="INFO"
+            doc:name="Log End"
+            message="#['[FLOW_END] get-shopify-products-sub']"/>
+
+</sub-flow>
+	<flow name="get-enriched-orders-flow" doc:id="0e6804ae-ccda-42de-ad78-854f7f827a11" initialState="started">
+		<vm:listener doc:name="Listener to Order Data" doc:id="700243db-41f1-4e79-9974-13c17707e4cb" queueName="OrderQueue" config-ref="VMConfigOrder"/>
+		<logger level="INFO" doc:name="Log Incoming Payload"
+        message='#["Order received from queue. Payload: #[payload]"]' />
+		<ee:transform doc:name="Set OS Key" doc:id="e31d52b1-3bda-4e3e-8ce5-0eb2d1fdcfde" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="OsKeySelect" ><![CDATA[%dw 2.0
+output application/java
+var region=payload.region
+---
+ if (region == "USA") "USAGau"
+    else if(region == "CAN") "CANGau"
+    else "USAGau"]]></ee:set-variable>
+				<ee:set-variable variableName="region" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.region]]></ee:set-variable>
+				<ee:set-variable variableName="currentOrder" ><![CDATA[%dw 2.0
+output application/json
+---
+payload.order]]></ee:set-variable>
+				<ee:set-variable variableName="originalPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+				<ee:set-variable variableName="sourceQueue" ><![CDATA[%dw 2.0
+output application/json
+---
+"OrderQueue"]]></ee:set-variable>
+				<ee:set-variable variableName="correlationId" ><![CDATA[correlationId]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<os:retrieve doc:name="Retrieve Order Data" doc:id="cb2912c6-f5b0-4051-8839-62a6454c13a7" key="#[vars.OsKeySelect]" objectStore="Object_Store" target="gauData"/>
+		<logger level="INFO" doc:name="Log GAU Data"
+        message='#["GAU data retrieved from Object Store: #[vars.gauData]"]' />
+		<ee:transform doc:name="Shopify Order to Gift JSON" doc:id="05048d58-f3c0-44af-ba5d-7c624f00d883">
+            <ee:message>
+            </ee:message>
+				<ee:variables>
+				<ee:set-variable resource="dwl/transform-shopify-orders-response.dwl" variableName="giftJson" />
+				</ee:variables>
+            
+        
+</ee:transform>
+ <logger level="INFO" doc:name="Before SF Donation Upsert"
+        message="#['Calling Salesforce Donation Upsert Subflow']" />
+		<flow-ref doc:name="Call Salesforce enriched data subFlow" name="get-salesforce-data-sub" doc:id="f9240df4-6db4-40a1-a5c0-56249e5aa1c0"/>
+		<error-handler ref="global-error-handler" />
+	</flow>
+
+
+
+</mule>

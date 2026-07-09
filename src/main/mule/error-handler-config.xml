@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+                          http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    
+
+    <error-handler name="global-error-handler">
+
+    <!-- HANDLE ONLY VALIDATION ERRORS -->
+    <on-error-continue type="VALIDATION:*">
+
+        <!-- WHY: preserve original message -->
+
+        <!-- WHY: standard structure -->
+        <set-variable variableName="errorResponse" value='#[{&#10;            errorCode: "400",&#10;            errorMessage: error.description default error.errorType,&#10;            errorType: "SHOPIFYPAPI:" ++ (error.errorType as String replace "VALIDATION:" with "VALIDATION_"),&#10;            failedAt: now(),&#10;            retryCount: (vars.retryCount default 0) + 1,&#10;            lastRetryAt: now(),&#10;            correlationId: vars.correlationId default correlationId,&#10;            sourceQueue: vars.sourceQueue default "UNKNOWN"&#10;        }]' doc:name="Set error Response Variable"/>
+
+        <!-- WHY: build DLQ structure -->
+        <set-payload value='#[{&#10;          originalPayload: vars.originalPayload default payload,&#10;          errorDetails: {&#10;            errorCode: vars.errorResponse.errorCode,&#10;            errorMessage: vars.errorResponse.errorMessage,&#10;            errorType: vars.errorResponse.errorType,&#10;            failedAt: vars.errorResponse.failedAt,&#10;            retryCount: vars.errorResponse.retryCount,&#10;            lastRetryAt: vars.errorResponse.lastRetryAt&#10;          },&#10;          metadata: {&#10;            correlationId: vars.errorResponse.correlationId,&#10;            sourceQueue: vars.errorResponse.sourceQueue,&#10;            originalTimestamp: now(),&#10;            api: p("api.name"),&#10;            environment: p("mule.env")&#10;          }&#10;        }]' doc:name="Set Error Payload"/>
+
+        <!-- WHY: send ONLY validation errors -->
+        <vm:publish queueName="ijm-error-queue"
+                    config-ref="VMConfigOrder"
+                    sendCorrelationId="ALWAYS" doc:name="Publish to DLQ"/>
+
+        <logger level="ERROR" message="#['Validation error pushed to ijm-error-queue']" doc:name="Log Error Message"/>
+
+    </on-error-continue>
+		<on-error-continue type="HTTP:*" doc:name="Handle HTTP Errors">
+
+    <!-- Build error response -->
+    <set-variable variableName="errorResponse" value='#[{
+        errorCode: (error.statusCode default "500") as String,
+        errorMessage: error.description default "HTTP ERROR",
+        errorType: 
+            if (error.description contains "Salesforce")
+                "SALESFORCE_API:CONNECTIVITY"
+            else if (error.description contains "Shopify")
+                "SHOPIFY_API:CONNECTIVITY"
+            else
+                "HTTP:CONNECTIVITY",
+        failedAt: now(),
+        retryCount: (vars.retryCount default 0) + 1,
+        lastRetryAt: now(),
+        correlationId: vars.correlationId default correlationId,
+        sourceQueue: vars.sourceQueue default "UNKNOWN"
+    }]' doc:name="Set error Response Variable"/>
+
+    <!-- DLQ payload -->
+    <set-payload value='#[{
+      originalPayload: vars.originalPayload default payload,
+      errorDetails: {
+        errorCode: vars.errorResponse.errorCode,
+        errorMessage: vars.errorResponse.errorMessage,
+        errorType: vars.errorResponse.errorType,
+        failedAt: vars.errorResponse.failedAt,
+        retryCount: vars.errorResponse.retryCount,
+        lastRetryAt: vars.errorResponse.lastRetryAt
+      },
+      metadata: {
+        correlationId: vars.errorResponse.correlationId,
+        sourceQueue: vars.errorResponse.sourceQueue,
+        originalTimestamp: now(),
+        api: p("api.name"),
+        environment: p("env") default "dev"
+      }
+    }]' doc:name="Set Error Payload"/>
+
+    <!-- Push to DLQ -->
+    <vm:publish queueName="ijm-error-queue"
+                config-ref="VMConfigOrder"
+                sendCorrelationId="ALWAYS" doc:name="Publish to DLQ"/>
+
+    <logger level="ERROR"
+            message="#['HTTP error pushed to ijm-error-queue']" doc:name="Log Error Message"/>
+
+</on-error-continue>
+</error-handler>
+
+</mule>

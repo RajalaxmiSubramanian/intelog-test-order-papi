@@ -1,0 +1,41 @@
+#%RAML 1.0
+title: ijm-order-processing-papi API
+version: v1
+baseUri: http://localhost:8081/api
+mediaType: application/json
+
+types:
+  Error:
+    type: object
+    properties:
+      success: boolean
+      correlationId: string
+      error:
+        type: object
+        properties:
+          code: string
+          message: string
+
+  SuccessResponse:
+    type: object
+    properties:
+      success: boolean
+      correlationId: string
+      data: any
+
+/revenue-processing-shopify-can-main:
+  displayName: Revenue Processing - Shopify CAN - Main
+  post:
+    description: Revenue Processing - Shopify CAN - Main endpoint
+    body:
+      application/json:
+        type: any
+    responses:
+      200:
+        body:
+          application/json:
+            type: SuccessResponse
+      500:
+        body:
+          application/json:
+            type: Error

@@ -1,0 +1,54 @@
+# Shopify USA Configuration
+shopify:
+  usa:
+    host: "store-ijm-dev.myshopify.com"
+    port: "443"
+    basepath: "/"
+    path: "admin/api/2026-01/graphql.json"
+
+# Shopify CAN Configuration
+  can:
+    host: "canada-uat.myshopify.com"
+    port: "443"
+    basepath: "/"
+    path: "admin/api/2026-01/graphql.json"
+
+# SALESFORCE SAPI Configuration
+salesforce:
+  sapi:
+    host: "ijm-salesforce-sapi.us-e2.cloudhub.io"
+    port: "80"
+    basePath: "/api/"
+
+  gau:
+    recordTypeId:
+      USA: "012o0000001AMWNAA4"
+      CAN: "012740000004Ox5AAE"
+
+    transactionFeesId:
+      USA: "a00gL00000nQxjOQAS"
+      CAN: "a00gL00000nQzYKQA0"
+
+    merchandiseId:
+      USA: "a1Co000000370FFEAY"
+      CAN: "null"
+
+  campaignId:
+    USA: "7015c000001aSVXAA2"
+    CAN: "701740000009kAwAAI"
+  #campaignId:
+    #USA: "a1Co0000003etpKEAQ"
+    #CAN: "a1C740000004zV1EAI"
+    
+# Salesforce Owner Ids -> hardcoded values for developer account
+  ownerId:
+    USA: "005gL000006O98QQAS"
+    CAN: "005gL000006O98QQAS"
+
+# Contact Record Type
+  contact:
+    recordTypeId: "012o0000000u0IN"
+
+# Default Account (Temporary placeholder if required)
+  default:
+    accountId: "001gL00000iTgYoQAK"
