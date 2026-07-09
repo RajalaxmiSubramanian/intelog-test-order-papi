@@ -13,328 +13,191 @@ http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/htt
 http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
 http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
 http://www.mulesoft.org/schema/mule/salesforce-composite http://www.mulesoft.org/schema/mule/salesforce-composite/current/mule-salesforce-composite.xsd">
-	<sub-flow name="get-salesforce-data-sub" doc:id="4572cbb6-869c-4db8-ab34-308b8fbaf6bf">
 
-   
+	<sub-flow name="salesforce-getData-subflow" doc:id="4572cbb6-869c-4db8-ab34-308b8fbaf6bf">
 
-    <logger level="INFO" doc:name="Log Start" doc:id="440b2497-e676-478c-9a7f-89a0bdc1868c" message="#['[FLOW_START] get-salesforce-data-sub']"/>
-<choice>
-    <when expression="#[isEmpty(vars.giftJson.person.email)]">
-        <raise-error type="VALIDATION:MISSING_FIELD"
-                     description="MISSING EMAIL"/>
-    </when>
-</choice>
+		<logger level="INFO" doc:name="Log Start" doc:id="440b2497-e676-478c-9a7f-89a0bdc1868c" message="#['[FLOW_START] salesforce-getData-subflow | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<choice>
+			<when expression="#[isEmpty(vars.giftJson.person.email)]">
+				<raise-error type="VALIDATION:MISSING_FIELD" description="MISSING EMAIL"/>
+			</when>
+		</choice>
 
-<!-- Validate TransactionId -->
-<choice>
-    <when expression="#[isEmpty(vars.giftJson.pay.external_transaction_id)]">
-        <raise-error type="VALIDATION:MISSING_FIELD"
-                     description="MISSING TransactionId"/>
-    </when>
-</choice>
+		<choice>
+			<when expression="#[isEmpty(vars.giftJson.pay.external_transaction_id)]">
+				<raise-error type="VALIDATION:MISSING_FIELD" description="MISSING TransactionId"/>
+			</when>
+		</choice>
+
 		<ee:transform doc:name="Request Payload of first composite call" doc:id="2b66b55f-5a3e-423e-a16d-895e8484bf13">
 			<ee:message>
-				<ee:set-payload><![CDATA[%dw 2.0
-output application/json
-var email             = (vars.giftJson.person.email default "") as String
-var lastName          = (vars.giftJson.person.last_name default "") as String
-var mailingCountry    = (vars.giftJson.person.country default  "") as String
-var mailingPostalCode = (vars.giftJson.person.postal_code  default "") as String
-var transactionId     = (vars.giftJson.pay.external_transaction_id  default "") as String
-
-// Escape single quotes used in SOQL string literals
-fun soqlEscape(value: String) = value replace "'" with "\\'"
-
-var contactQuery =
-    "SELECT Id,LastName,FirstName,MailingPostalCode,MailingCountry,Email FROM Contact WHERE Email='" ++ soqlEscape(email) ++
-    "' OR (LastName='" ++ soqlEscape(lastName) ++
-    "' AND MailingCountry='" ++ soqlEscape(mailingCountry) ++
-    "' AND MailingPostalCode='" ++ soqlEscape(mailingPostalCode) ++ "')"
-
-var opportunityQuery =
-    "SELECT Id,Name,Transaction_Id__c FROM Opportunity WHERE Transaction_Id__c='" ++ soqlEscape(transactionId) ++ "'"
-
----
-{
-  allOrNone: true,
-  compositeRequest: [
-    {
-      method: "GET",
-      url: "/services/data/v64.0"  ++ "/query/?q=" ++ contactQuery,
-      referenceId: "ContactByFields"
-    },
-    {
-      method: "GET",
-      url: "/services/data/v64.0" ++ "/query/?q=" ++ opportunityQuery,
-      referenceId: "GetOpportunityByTransactionId"
-    }
-  ]
-}]]></ee:set-payload>
+				<ee:set-payload resource="dwl/transform-sf-first-composite-request.dwl"/>
 			</ee:message>
-			<ee:variables >
-				<ee:set-variable variableName="path" ><![CDATA[%dw 2.0
+			<ee:variables>
+				<ee:set-variable variableName="path"><![CDATA[%dw 2.0
 output application/json
 ---
 p('salesforce.api.compositeRequest.path')]]></ee:set-variable>
-				<ee:set-variable variableName="httpMethod" ><![CDATA[p('http.method.post')]]></ee:set-variable>
+				<ee:set-variable variableName="httpMethod"><![CDATA[p('http.method.post')]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<logger level="INFO" doc:name="First Request Composite payload Log Message" doc:id="9f5d1b33-1cae-424f-bb63-f4136df9cbc1" message="#['First composite Request payload -&gt; #[payload]']"/>
-		<flow-ref doc:name="Salesforce Composite Request SubFlow" doc:id="2be3c91e-3bf1-4e1d-9cd2-9a61b8bd1cbe" name="post-salesforce-request-sub" target="getCompositeResponse"/>
-		<logger level="INFO" doc:name="First Composite Response Log Message" doc:id="4520db67-0043-4409-9b9b-c036d0be178a" message="#['First Composite Response -&gt; #[vars.getCompositeResponse]']"/>
+
+		<logger level="INFO" doc:name="First Request Composite payload Log Message" doc:id="9f5d1b33-1cae-424f-bb63-f4136df9cbc1" message="#['[salesforce-getData-subflow] First composite Request payload built | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<flow-ref doc:name="Salesforce Composite Request SubFlow" doc:id="2be3c91e-3bf1-4e1d-9cd2-9a61b8bd1cbe" name="salesforce-postRequest-subflow" target="getCompositeResponse"/>
+		<logger level="INFO" doc:name="First Composite Response Log Message" doc:id="4520db67-0043-4409-9b9b-c036d0be178a" message="#['[salesforce-getData-subflow] First Composite Response received | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+
 		<ee:transform doc:name="Set sfContactId and opportunityName" doc:id="cb5d5b1c-4774-4a4d-96ce-b2c9007ee6e1">
 			<ee:message>
 			</ee:message>
 			<ee:variables>
-				<ee:set-variable variableName="sfContactId"><![CDATA[%dw 2.0
-output application/json
-var contactResponse = (vars.getCompositeResponse.compositeResponse filter ($.referenceId == "ContactByFields"))
-
-var contactRecords =
- if(!isEmpty(contactResponse))
-    contactResponse[0].body.records
- else []
-
-var emailMatches =
- contactRecords filter ($.Email == vars.giftJson.person.email)
-
-var fallbackMatches =
- contactRecords filter ($.Email != vars.giftJson.person.email)
-
----
-if(!isEmpty(emailMatches))
- emailMatches[0].Id
-else if(!isEmpty(fallbackMatches))
- fallbackMatches[0].Id
-else
- ""]]></ee:set-variable>
-				<ee:set-variable variableName="opportunityName"><![CDATA[%dw 2.0
-output application/json
-var opportunity =
-    (vars.getCompositeResponse.compositeResponse
-        filter ($.referenceId == "GetOpportunityByTransactionId"))[0].body.records default []
-
----
-if(!isEmpty(opportunity))
-    opportunity[0].Name
-else
-    null]]></ee:set-variable>
+				<ee:set-variable variableName="sfContactId" resource="dwl/transform-sf-contact-id.dwl"/>
+				<ee:set-variable variableName="opportunityName" resource="dwl/transform-sf-opportunity-name.dwl"/>
 			</ee:variables>
 		</ee:transform>
 
-    
-    
-    
+		<set-variable value="#[%dw 2.0
+output application/json
+---
+read(MuleRuntime.loadFile('dwl/transform-updated-gift-json.dwl'), 'application/dw')(vars)]" doc:name="Updated giftJson Variable" doc:id="447f123f-a748-4067-8d9e-399a31da0bd1" variableName="giftJson"/>
 
-    
-    <set-variable value='#[%dw 2.0&#10;output application/json&#10;&#10;var region = if (vars.giftJson.pay.currency == "USD") "USA" else "CAN"&#10;&#10;---&#10;vars.giftJson&#10;    update {&#10;        case sf_ids at .sf_ids -&gt;&#10;            (sf_ids default {}) ++ {&#10;                sf_contact_id: vars.sfContactId&#10;            }&#10;    }&#10;    ++ {&#10;        opportunity_name: vars.opportunityName,&#10;        region: vars.region&#10;    }]' doc:name="Updated giftJson Variable" doc:id="447f123f-a748-4067-8d9e-399a31da0bd1" variableName="giftJson"/>
-		<logger level="INFO" doc:name="Log Message" doc:id="ac39c486-229b-43cb-83b8-c3597b11272a" message="#['Gift Json Response-&gt; #[vars.giftJson]']"/>
-		<vm:publish queueName="EnrichedOrderQueue"
-                config-ref="VMConfigOrder" sendCorrelationId="ALWAYS" doc:name="Publish Enriched Gift Json ">
-			<vm:content ><![CDATA[#[vars.giftJson]]]></vm:content>
+		<logger level="INFO" doc:name="Log Message" doc:id="ac39c486-229b-43cb-83b8-c3597b11272a" message="#['[salesforce-getData-subflow] Gift Json updated successfully | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<vm:publish queueName="EnrichedOrderQueue" config-ref="VMConfigOrder" sendCorrelationId="ALWAYS" doc:name="Publish Enriched Gift Json">
+			<vm:content><![CDATA[#[vars.giftJson]]]></vm:content>
 		</vm:publish>
-		<logger level="INFO" doc:name="Log End" doc:id="511989de-66fe-40ba-a368-f7892279a699" message="#['[FLOW_END] get-salesforce-data-sub, Gift Json Data published successfully to queue']"/>
+		<logger level="INFO" doc:name="Log End" doc:id="511989de-66fe-40ba-a368-f7892279a699" message="#['[FLOW_END] salesforce-getData-subflow, Gift Json Data published successfully to queue | correlationId=' ++ (vars.correlationId default correlationId)]"/>
 
-</sub-flow>
+		<error-handler>
+			<on-error-propagate type="ANY">
+				<logger level="ERROR" doc:name="Log Error" message="#['[ERROR] salesforce-getData-subflow | correlationId=' ++ (vars.correlationId default correlationId) ++ ' | error=' ++ (error.description default '')]" category="com.company.project"/>
+			</on-error-propagate>
+		</error-handler>
+
+	</sub-flow>
+
 	<flow name="upsert-salesforce-donation-flow" initialState="started">
 
-    <vm:listener queueName="EnrichedOrderQueue"
-                 config-ref="VMConfigOrder" doc:name="Listener to Enriched Gift Json"/>
+		<vm:listener queueName="EnrichedOrderQueue" config-ref="VMConfigOrder" doc:name="Listener to Enriched Gift Json"/>
 
-    <logger message="#['[FLOW_START] upsert-salesforce-donation-flow, Received enriched Gift JSON']" level="INFO" doc:name="Log Start"/>
+		<logger message="#['[FLOW_START] upsert-salesforce-donation-flow, Received enriched Gift JSON']" level="INFO" doc:name="Log Start"/>
 
-		<ee:transform doc:name="Set giftJson, sfContactId, opportunityName variables" doc:id="eeb65096-29c9-47b5-8999-76ba25b2224c" >
-			<ee:message >
-			</ee:message>
-			<ee:variables >
-				<ee:set-variable variableName="sfContactId" ><![CDATA[%dw 2.0
-output application/json
----
-payload.sf_ids.sf_contact_id default null]]></ee:set-variable>
-				<ee:set-variable variableName="giftJson" ><![CDATA[%dw 2.0
-output application/json
----
-payload]]></ee:set-variable>
-				<ee:set-variable variableName="opportunityName" ><![CDATA[%dw 2.0
-output application/json
----
-payload.opportunity_name default null]]></ee:set-variable>
-				<ee:set-variable variableName="originalPayload" ><![CDATA[%dw 2.0
-output application/json
----
-payload]]></ee:set-variable>
-				<ee:set-variable variableName="sourceQueue" ><![CDATA[%dw 2.0
-output application/json
----
-"EnrichedOrderQueue"]]></ee:set-variable>
-				<ee:set-variable variableName="retryCount" ><![CDATA[%dw 2.0
-output application/json
----
-0]]></ee:set-variable>
-				<ee:set-variable variableName="correlationId" ><![CDATA[correlationId]]></ee:set-variable>
-			</ee:variables>
-		</ee:transform>
-		<ee:transform doc:name="Frame Composite Requests" doc:id="e0847615-9a32-4661-8474-af9c5487745e" >
-			<ee:message >
-			</ee:message>
-			<ee:variables >
-				<ee:set-variable resource="dwl/transform-sf-contact-insert-request.dwl" variableName="sfContactInsert" />
-				<ee:set-variable resource="dwl/transform-sf-opportunity-upsert-request.dwl" variableName="sfOpportunityUpsert" />
-				<ee:set-variable resource="dwl/transform-gau-allocation-request.dwl" variableName="sfGauAllocation" />
-			</ee:variables>
-		</ee:transform>
-		<ee:transform doc:name="Request Payload of second Composite call" doc:id="6835aeaa-c0fc-44cc-b46c-7629fef81383">
+		<ee:transform doc:name="Set giftJson, sfContactId, opportunityName variables" doc:id="eeb65096-29c9-47b5-8999-76ba25b2224c">
 			<ee:message>
-				<ee:set-payload><![CDATA[%dw 2.0
-output application/json
-var base = "/services/data/v64.0"
-var contactRef = "UpsertedContact"
-var accountQueryRef = "AccountIdfromContact"
-var oppRef = "newOpportunity"
-var contactMethod = if(vars.sfContactId != "") "PATCH" else "POST"
-
-var contactUrl = if(vars.sfContactId != "") base ++ "/sobjects/Contact/" ++ vars.sfContactId
-    else base ++ "/sobjects/Contact"
-
-var contactIdForQuery = if(vars.sfContactId != "") vars.sfContactId else "@{" ++ contactRef ++ ".id}"
-var gauAllocation = (
-    vars.sfGauAllocation map ((a, idx) ->
-      {
-        method: "POST",
-        url: base ++ "/sobjects/npsp_Allocation__c",
-        referenceId: "newAllocation" ++ ((idx + 1) as String),
-        body:
-          a
-          ++ {
-            npsp_Opportunity__c: "@{" ++ oppRef ++ ".id}"
-          }
-      }
-    )
-  )
----
-{
-  allOrNone: true,
-  compositeRequest:
-
-  [
-
-    // CONTACT
-    {
-     method: contactMethod,
-     url: contactUrl,
-     referenceId: contactRef,
-     body: vars.sfContactInsert.Contact
-},
-
-    // GET ACCOUNT FROM CONTACT
-    {
-     method: "GET",
-     url: base ++ "/query/?q=SELECT Id, AccountId FROM Contact WHERE Id='" ++ contactIdForQuery ++ "'",
-     referenceId: accountQueryRef
-},
-
-    // OPPORTUNITY
-    {
-      method: "POST",
-      url: base ++ "/sobjects/Opportunity",
-      referenceId: oppRef,
-      body: vars.sfOpportunityUpsert.Opportunity
-        ++ {
-          AccountId: "@{" ++ accountQueryRef ++ ".records[0].AccountId}",
-          npsp_Primary_Contact__c: "@{" ++ accountQueryRef ++ ".records[0].Id}"
-        }
-    }
-    
-
-  ] ++ gauAllocation
-  
-}]]></ee:set-payload>
 			</ee:message>
 			<ee:variables>
-				<ee:set-variable variableName="path" ><![CDATA[%dw 2.0
+				<ee:set-variable variableName="sfContactId" resource="dwl/transform-set-sf-contact-id-from-payload.dwl"/>
+				<ee:set-variable variableName="giftJson" resource="dwl/transform-set-gift-json-from-payload.dwl"/>
+				<ee:set-variable variableName="opportunityName" resource="dwl/transform-set-opportunity-name-from-payload.dwl"/>
+				<ee:set-variable variableName="originalPayload" resource="dwl/transform-set-original-payload.dwl"/>
+				<ee:set-variable variableName="correlationId"><![CDATA[#[correlationId]]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+
+		<ee:transform doc:name="Frame Composite Requests" doc:id="e0847615-9a32-4661-8474-af9c5487745e">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable resource="dwl/transform-sf-contact-insert-request.dwl" variableName="sfContactInsert"/>
+				<ee:set-variable resource="dwl/transform-sf-opportunity-upsert-request.dwl" variableName="sfOpportunityUpsert"/>
+				<ee:set-variable resource="dwl/transform-gau-allocation-request.dwl" variableName="sfGauAllocation"/>
+			</ee:variables>
+		</ee:transform>
+
+		<ee:transform doc:name="Request Payload of second Composite call" doc:id="6835aeaa-c0fc-44cc-b46c-7629fef81383">
+			<ee:message>
+				<ee:set-payload resource="dwl/transform-sf-second-composite-request.dwl"/>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="path"><![CDATA[%dw 2.0
 output application/json
 ---
 p('salesforce.api.compositeRequest.path')]]></ee:set-variable>
-				<ee:set-variable variableName="httpMethod" ><![CDATA[p('http.method.post')]]></ee:set-variable>
+				<ee:set-variable variableName="httpMethod"><![CDATA[p('http.method.post')]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<logger level="INFO" doc:name="Second Request Composite payload Log Message" doc:id="b25dd0b5-8ef5-4456-8bc9-e256229d6cc0" message="#['Second Composite Request payload for orderId: #[vars.giftJson.context_id] -&gt; #[payload]']"/>
-		<flow-ref doc:name="Salesforce Composite Request SubFlow" doc:id="3029d2c9-b958-41aa-8461-5cf1133f1132" name="post-salesforce-request-sub" target="postCompositeResponse"/>
-		<logger level="INFO"
-message="#['Composite Response Payload for orderId: #[vars.giftJson.context_id]-&gt; #[vars.postCompositeResponse]']" doc:name="Second Composite Response Log Message"/>
-		<set-variable value='#[%dw 2.0&#10;output application/java&#10;---&#10;(vars.postCompositeResponse.compositeResponse&#10;   filter ($.referenceId == "newOpportunity"))[0].body.id default null]' doc:name="Set opportunityId Variable" doc:id="be4cbead-da9b-40ca-b498-67013fe8535e" variableName="sf_opportunity_id"/>
+
+		<logger level="INFO" doc:name="Second Request Composite payload Log Message" doc:id="b25dd0b5-8ef5-4456-8bc9-e256229d6cc0" message="#['[upsert-salesforce-donation-flow] Second Composite Request built for orderId: ' ++ (vars.giftJson.context_id default '') ++ ' | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<flow-ref doc:name="Salesforce Composite Request SubFlow" doc:id="3029d2c9-b958-41aa-8461-5cf1133f1132" name="salesforce-postRequest-subflow" target="postCompositeResponse"/>
+		<logger level="INFO" message="#['[upsert-salesforce-donation-flow] Second Composite Response received for orderId: ' ++ (vars.giftJson.context_id default '') ++ ' | correlationId=' ++ (vars.correlationId default correlationId)]" doc:name="Second Composite Response Log Message"/>
+
+		<set-variable value="#[%dw 2.0
+output application/java
+---
+read(MuleRuntime.loadFile('dwl/transform-set-opportunity-id.dwl'), 'application/dw')(vars)]" doc:name="Set opportunityId Variable" doc:id="be4cbead-da9b-40ca-b498-67013fe8535e" variableName="sfOpportunityId"/>
 
 		<choice doc:name="Validate Opportunity ID">
-    <when expression="#[isEmpty(vars.sf_opportunity_id)]">
-        <raise-error 
-            type="VALIDATION:MISSING_FIELD"
-            description="MISSING OPPORTUNITY ID"/>
-    </when>
-    <otherwise>
-        <flow-ref name="insert-salesforce-orderItem-sub" doc:name="Call Insert Salesforce OrderItem sub"/>
-    </otherwise>
-</choice>
-		<logger level="INFO" doc:name="Log End" doc:id="24a6e8fb-e632-4a7d-91f0-0b55b39fe6f3" message="#['[FLOW_END] salesforce-donation-processing-flow']"/>
-		<error-handler ref="global-error-handler" />
+			<when expression="#[isEmpty(vars.sfOpportunityId)]">
+				<raise-error type="VALIDATION:MISSING_FIELD" description="MISSING OPPORTUNITY ID"/>
+			</when>
+			<otherwise>
+				<flow-ref name="salesforce-insertOrderItem-subflow" doc:name="Call Insert Salesforce OrderItem sub"/>
+			</otherwise>
+		</choice>
 
-</flow>
-  <sub-flow name="insert-salesforce-orderItem-sub"
-          doc:name="SF Donation Order Item Upsert Sub">
+		<logger level="INFO" doc:name="Log End" doc:id="24a6e8fb-e632-4a7d-91f0-0b55b39fe6f3" message="#['[FLOW_END] upsert-salesforce-donation-flow | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<error-handler ref="global-error-handler"/>
 
-    <logger level="INFO"
-            message="#['[FLOW_START] insert-salesforce-orderItem-sub']" doc:name="Log Start"/>
+	</flow>
+
+	<sub-flow name="salesforce-insertOrderItem-subflow" doc:name="SF Donation Order Item Upsert Sub">
+
+		<logger level="INFO" message="#['[FLOW_START] salesforce-insertOrderItem-subflow | correlationId=' ++ (vars.correlationId default correlationId)]" doc:name="Log Start"/>
+
 		<foreach collection="#[vars.giftJson.line_items]" doc:name="For Each OrderItem" batchSize="200">
 
+			<choice doc:name="Validate Shopify OrderItem ID">
+				<when expression="#[sizeOf(payload filter (item) -> isEmpty(item.id default null)) > 0]">
+					<raise-error type="VALIDATION:MISSING_FIELD" description="MISSING SHOPIFY ID"/>
+				</when>
+			</choice>
 
-       <choice doc:name="Validate Shopify OrderItem ID">
-    <when expression="#[sizeOf(payload filter (item) -&gt; isEmpty(item.id default null)) &gt; 0]">
-        <raise-error 
-            type="VALIDATION:MISSING_FIELD"
-            description="MISSING SHOPIFY ID"/>
-    </when>
-</choice>
-        <ee:transform doc:name="Request Payload of sfObject call" doc:id="1fe8cb15-13ee-40c2-9ce0-bd3182a9a920">
-            <ee:message>
-                <ee:set-payload resource="dwl/transform-sf-orderItem-upsert-request.dwl"/>
-            </ee:message>
-            <ee:variables>
-                <ee:set-variable variableName="path"><![CDATA[%dw 2.0
+			<ee:transform doc:name="Request Payload of sfObject call" doc:id="1fe8cb15-13ee-40c2-9ce0-bd3182a9a920">
+				<ee:message>
+					<ee:set-payload resource="dwl/transform-sf-orderItem-upsert-request.dwl"/>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="path"><![CDATA[%dw 2.0
 output application/json
 ---
 p('salesforce.api.sObjects.path')]]></ee:set-variable>
-                <ee:set-variable variableName="httpMethod"><![CDATA[p('http.method.post')]]></ee:set-variable>
-            </ee:variables>
-        </ee:transform>
+					<ee:set-variable variableName="httpMethod"><![CDATA[p('http.method.post')]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
 
-        <logger level="INFO"
-                doc:name="Request Payload of OrderItem sObject Call"
-                message="#['sfObject Request Payload for orderId: #[vars.giftJson.context_id]-&gt; #[payload]']" />
+			<logger level="INFO" doc:name="Request Payload of OrderItem sObject Call" message="#['[salesforce-insertOrderItem-subflow] sfObject Request Payload for orderId: ' ++ (vars.giftJson.context_id default '') ++ ' | correlationId=' ++ (vars.correlationId default correlationId)]"/>
 
-        
-        <flow-ref doc:name="Call Salesforce Sapi Flow Reference"
-                  doc:id="f6d5f628-43e0-4b54-8285-4794fa33a0b5"
-                  name="post-salesforce-request-sub"/>
-			<logger level="INFO" message="#['sfObject Response Payload for orderId: #[vars.giftJson.context_id] -&gt; #[payload]']" doc:name="Log End" />
+			<flow-ref doc:name="Call Salesforce Sapi Flow Reference" doc:id="f6d5f628-43e0-4b54-8285-4794fa33a0b5" name="salesforce-postRequest-subflow"/>
 
-    </foreach>
+			<logger level="INFO" message="#['[salesforce-insertOrderItem-subflow] sfObject Response Payload for orderId: ' ++ (vars.giftJson.context_id default '') ++ ' | correlationId=' ++ (vars.correlationId default correlationId)]" doc:name="Log End"/>
 
-</sub-flow>
+		</foreach>
 
-	<sub-flow name="post-salesforce-request-sub" doc:id="17481bca-bb6c-49b5-8937-11e7465ccde2" >
-		<logger level="INFO" doc:name="Log Start" doc:id="76d5a22e-6972-44e7-a9c8-5ae3c1d43f10" message='#["Calling Salesforce SAPI"]'/>
-		<http:request method="#[vars.httpMethod]" doc:name="Call Salesforce Sapi" doc:id="84bb2a18-a5ba-4112-92e9-3ed48e693a19" config-ref="salesforceSAPIConfig" path='#[vars.path]'>
-			<http:headers ><![CDATA[#[{
+		<error-handler>
+			<on-error-propagate type="ANY">
+				<logger level="ERROR" doc:name="Log Error" message="#['[ERROR] salesforce-insertOrderItem-subflow | correlationId=' ++ (vars.correlationId default correlationId) ++ ' | error=' ++ (error.description default '')]" category="com.company.project"/>
+			</on-error-propagate>
+		</error-handler>
+
+	</sub-flow>
+
+	<sub-flow name="salesforce-postRequest-subflow" doc:id="17481bca-bb6c-49b5-8937-11e7465ccde2">
+		<logger level="INFO" doc:name="Log Start" doc:id="76d5a22e-6972-44e7-a9c8-5ae3c1d43f10" message="#['[FLOW_START] salesforce-postRequest-subflow | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+		<http:request method="#[vars.httpMethod]" doc:name="Call Salesforce Sapi" doc:id="84bb2a18-a5ba-4112-92e9-3ed48e693a19" config-ref="salesforceSAPIConfig" path="#[vars.path]">
+			<http:headers><![CDATA[#[{
 "client_id": p('secure::salesforce.headers.client_id'),
 "client_secret": p('secure::salesforce.headers.client_secret'),
 "correlationId" : vars.correlationId
 }]]]></http:headers>
-			<http:uri-params ><![CDATA[#[vars.uriParams default {}]]]></http:uri-params>
-			<http:query-params ><![CDATA[#[vars.queryParams default {}]]]></http:query-params>
+			<http:uri-params><![CDATA[#[vars.uriParams default {}]]]></http:uri-params>
+			<http:query-params><![CDATA[#[vars.queryParams default {}]]]></http:query-params>
 		</http:request>
-		<logger level="INFO" doc:name="Log End " doc:id="1649f11d-ac0e-47be-a41b-931c1cdad25e" message='#["Salesforce SAPI call completed"]'/>
+		<logger level="INFO" doc:name="Log End" doc:id="1649f11d-ac0e-47be-a41b-931c1cdad25e" message="#['[FLOW_END] salesforce-postRequest-subflow | correlationId=' ++ (vars.correlationId default correlationId)]"/>
+
+		<error-handler>
+			<on-error-propagate type="ANY">
+				<logger level="ERROR" doc:name="Log Error" message="#['[ERROR] salesforce-postRequest-subflow | correlationId=' ++ (vars.correlationId default correlationId) ++ ' | error=' ++ (error.description default '')]" category="com.company.project"/>
+			</on-error-propagate>
+		</error-handler>
+
 	</sub-flow>
-
- 
-
 
 </mule>
