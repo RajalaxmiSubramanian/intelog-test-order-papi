@@ -8,79 +8,71 @@ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
-http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
-http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd">
 
-<sub-flow name="get-shopify-orders-sub" doc:name="Query Shopify Order by Store Front - Sub">
-    <logger level="INFO" doc:name="Log Start" message="#['Calling get-shopify-orders-sub | region=' ++ vars.region]"/>
-    
+<sub-flow name="shopifyOrders-get-subflow" doc:name="Query Shopify Order by Store Front - Sub">
+    <logger level="INFO" doc:name="Log Start" message="#['[FLOW_START] shopifyOrders-get-subflow | correlationId=' ++ correlationId ++ ' | region=' ++ (vars.region default 'UNKNOWN')]" category="com.company.project"/>
+
     <ee:transform doc:name="Set Order Query" doc:id="678673ac-eb1d-4e53-b36f-eca2d15c231a">
-					<ee:message />
-					<ee:variables>
-				<ee:set-variable variableName="shopifyQuery" ><![CDATA[%dw 2.0
-import * from modules::graphql::query::getOrdersAndTransactionDetails
+        <ee:message />
+        <ee:variables>
+            <ee:set-variable variableName="shopifyQuery"><![CDATA[%dw 2.0
 output application/json
 ---
-{
-    "query": getOrdersAndTransactionDetails(),
-    "variables": {
-        "pageSize": (p('shopify.query.item.limit') as Number),
-        "queryString": "financial_status:" ++ (p('shopify.query.item.financialStatus') as String) ++
-    " AND updated_at:>='" ++
-    ((vars.sinceDate as DateTime) as String {format: "yyyy-MM-dd'T'HH:mm:ss'Z'"}) ++ "'"
-    }
-}]]></ee:set-variable>
-					</ee:variables>
-				</ee:transform>
-    
-    <flow-ref doc:name="Call: Shopify GraphQL Query Sub" doc:id="3adc8f90-1386-4ebe-b38f-37d62335c17a" name="post-shopify-graph-query-sub" />
+read(MuleRuntime.loadFile('dwl/shopify/setOrderQuery.dwl'), 'application/dw')(vars, p)]]></ee:set-variable>
+        </ee:variables>
+    </ee:transform>
+
+    <flow-ref doc:name="Call: Shopify GraphQL Query Sub" doc:id="3adc8f90-1386-4ebe-b38f-37d62335c17a" name="shopifyGraphQL-post-subflow" />
     <logger level="INFO"
             doc:name="Log End"
-            message="#['Orders received from Shopify | count=' ++ (sizeOf(payload.data.orders.edges default []))]"/>
+            message="#['[FLOW_END] shopifyOrders-get-subflow | correlationId=' ++ correlationId ++ ' | ordersCount=' ++ (sizeOf(payload.data.orders.edges default []) as String)]" category="com.company.project"/>
+    <error-handler>
+        <on-error-propagate type="ANY">
+            <logger level="ERROR" doc:name="Log Error" message="#['[ERROR] shopifyOrders-get-subflow | correlationId=' ++ correlationId ++ ' | errorType=' ++ (error.errorType as String default 'UNKNOWN') ++ ' | errorDescription=' ++ (error.description default '') ++ ' | flowName=shopifyOrders-get-subflow | rootCause=' ++ (error.cause.message default 'none')]" category="com.company.project"/>
+        </on-error-propagate>
+    </error-handler>
   </sub-flow>
-  
-	<sub-flow name="get-shopify-product-inventory-varients-sub" doc:id="fe96bab7-80cc-4ea7-b10d-59c8a057a439">
-		<logger level="INFO" doc:name="Log Start" doc:id="9d23881e-3e17-4f24-88eb-775066058df4" message="#['get-shopify-product-inventory-varients-sub | region=' ++ vars.region]" />
+
+	<sub-flow name="shopifyProductInventory-get-subflow" doc:id="fe96bab7-80cc-4ea7-b10d-59c8a057a439">
+		<logger level="INFO" doc:name="Log Start" doc:id="9d23881e-3e17-4f24-88eb-775066058df4" message="#['[FLOW_START] shopifyProductInventory-get-subflow | correlationId=' ++ correlationId ++ ' | region=' ++ (vars.region default 'UNKNOWN')]" category="com.company.project"/>
 		<ee:transform doc:name="Set Product Inventory Variant Query" doc:id="06491537-57fc-48b4-836f-c8e313673e5d">
 			<ee:message />
 			<ee:variables>
-				<ee:set-variable variableName="shopifyQuery" ><![CDATA[%dw 2.0
-import * from modules::graphql::query::getProductWithVariantsAndInventoryDetails
+				<ee:set-variable variableName="shopifyQuery"><![CDATA[%dw 2.0
 output application/json
 ---
-{
-	"query":getProductWithVariantsAndInventoryDetails(),
-	"variables": {
-  		"productId": vars.currentLineItem.product.id,
-  		"pageSize" : (p('shopify.query.item.limit') as Number) 
-	 }
-}
-
-]]></ee:set-variable>
+read(MuleRuntime.loadFile('dwl/shopify/setProductInventoryVariantQuery.dwl'), 'application/dw')(vars, p)]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-		<flow-ref doc:name="Call: Shopify GraphQL Query Sub" doc:id="0cec30d0-4cab-463c-bdd8-33104385c0b6" name="post-shopify-graph-query-sub" />
-		<logger level="INFO" doc:name="Log End" doc:id="7c4b69b6-d64a-40d4-b8ea-108752fad4aa" message="#['Products received from Shopify | count=' ++ (sizeOf(payload default []))]" />
+		<flow-ref doc:name="Call: Shopify GraphQL Query Sub" doc:id="0cec30d0-4cab-463c-bdd8-33104385c0b6" name="shopifyGraphQL-post-subflow" />
+		<logger level="INFO" doc:name="Log End" doc:id="7c4b69b6-d64a-40d4-b8ea-108752fad4aa" message="#['[FLOW_END] shopifyProductInventory-get-subflow | correlationId=' ++ correlationId ++ ' | productsCount=' ++ (sizeOf(payload default []) as String)]" category="com.company.project"/>
+		<error-handler>
+			<on-error-propagate type="ANY">
+				<logger level="ERROR" doc:name="Log Error" message="#['[ERROR] shopifyProductInventory-get-subflow | correlationId=' ++ correlationId ++ ' | errorType=' ++ (error.errorType as String default 'UNKNOWN') ++ ' | errorDescription=' ++ (error.description default '') ++ ' | flowName=shopifyProductInventory-get-subflow | rootCause=' ++ (error.cause.message default 'none')]" category="com.company.project"/>
+			</on-error-propagate>
+		</error-handler>
 	</sub-flow>
 
-  
-  <sub-flow name="post-shopify-graph-query-sub" doc:name="Shopify GraphQL Query Sub">
-    <logger level="INFO" doc:name="Log Start" message="#['[FLOW_START] post-shopify-graph-query-sub']"/>
-    
+
+  <sub-flow name="shopifyGraphQL-post-subflow" doc:name="Shopify GraphQL Query Sub">
+    <logger level="INFO" doc:name="Log Start" message="#['[FLOW_START] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId ++ ' | region=' ++ (vars.region default 'UNKNOWN')]" category="com.company.project"/>
+
     <choice doc:name="Validate GraphQL Parameters">
       <when expression="#[(vars.region == null) or (vars.shopifyQuery == null)]">
-        <logger level="ERROR" message="#['Missing required parameters: region or query']"/>
+        <logger level="ERROR" message="#['[ERROR] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId ++ ' | errorType=VALIDATION:MISSING_PARAMETERS | errorDescription=Missing required parameters: region or query | flowName=shopifyGraphQL-post-subflow | rootCause=region or shopifyQuery variable is null']" category="com.company.project"/>
         <raise-error type="VALIDATION:MISSING_PARAMETERS" description="Region and at least one query parameter are required"/>
       </when>
       <otherwise>
-        <logger level="INFO" message="#['Parameters validation passed']"/>
+        <logger level="INFO" message="#['Parameters validation passed | correlationId=' ++ correlationId]" category="com.company.project"/>
       </otherwise>
     </choice>
-    
+
 		<set-payload value='#[vars.shopifyQuery]' doc:name="Set GraphQL Query Payload" />
 		<choice doc:name="Select Shopify GraphQL Endpoint">
       <when expression="#[vars.region == 'USA']">
-        <logger level="INFO" message="#['Routing to USA Shopify GraphQL endpoint']"/>
+        <logger level="INFO" message="#['Routing to USA Shopify GraphQL endpoint | correlationId=' ++ correlationId]" category="com.company.project"/>
+        <logger level="INFO" doc:name="Log Before USA HTTP Request" message="#['[BEFORE_HTTP_REQUEST] Calling Shopify USA GraphQL endpoint | correlationId=' ++ correlationId ++ ' | region=USA']" category="com.company.project"/>
         <http:request doc:name="Shopify_USA_HTTP_Config" config-ref="shopifyUSAHttpConfig" method="${http.method.post}" path="${shopify.usa.path}">
           <http:headers><![CDATA[#[{
 	"X-Shopify-Access-Token": p('secure::shopify.accessToken.usa'),
@@ -89,9 +81,11 @@ output application/json
     }]]]>
           </http:headers>
         </http:request>
+        <logger level="INFO" doc:name="Log After USA HTTP Response" message="#['[AFTER_HTTP_RESPONSE] Received response from Shopify USA GraphQL endpoint | correlationId=' ++ correlationId ++ ' | region=USA']" category="com.company.project"/>
       </when>
       <when expression="#[vars.region == 'CAN']">
-        <logger level="INFO" message="#['Routing to CAN Shopify GraphQL endpoint']"/>
+        <logger level="INFO" message="#['Routing to CAN Shopify GraphQL endpoint | correlationId=' ++ correlationId]" category="com.company.project"/>
+        <logger level="INFO" doc:name="Log Before CAN HTTP Request" message="#['[BEFORE_HTTP_REQUEST] Calling Shopify CAN GraphQL endpoint | correlationId=' ++ correlationId ++ ' | region=CAN']" category="com.company.project"/>
         <http:request doc:name="Shopify_CAN_HTTP_Config" config-ref="shopifyCANHttpConfig" method="${http.method.post}" path="${shopify.can.path}">
           <http:headers><![CDATA[#[{
 	"X-Shopify-Access-Token": p('secure::shopify.accessToken.can'),
@@ -100,25 +94,31 @@ output application/json
     }]]]>
           </http:headers>
         </http:request>
+        <logger level="INFO" doc:name="Log After CAN HTTP Response" message="#['[AFTER_HTTP_RESPONSE] Received response from Shopify CAN GraphQL endpoint | correlationId=' ++ correlationId ++ ' | region=CAN']" category="com.company.project"/>
       </when>
       <otherwise>
-        <logger level="ERROR" message="#['Unsupported region for GraphQL endpoint']"/>
+        <logger level="ERROR" message="#['[ERROR] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId ++ ' | errorType=CONNECTIVITY:UNSUPPORTED_REGION | errorDescription=Unsupported region for GraphQL endpoint | flowName=shopifyGraphQL-post-subflow | region=' ++ (vars.region default 'UNKNOWN') ++ ' | rootCause=Region not supported for Shopify GraphQL endpoint']" category="com.company.project"/>
         <raise-error type="CONNECTIVITY:UNSUPPORTED_REGION" description="Region not supported for Shopify GraphQL endpoint"/>
       </otherwise>
     </choice>
-    
+
     <choice doc:name="Validate GraphQL Response">
       <when expression="#[payload.errors != null and sizeOf(payload.errors) &gt; 0]">
-        <logger level="ERROR" message="#['GraphQL query returned errors']"/>
-        <set-variable variableName="graphqlErrors" value="#[payload.errors]" doc:name="Capture GraphQL Errors"/>
+        <logger level="ERROR" message="#['[ERROR] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId ++ ' | errorType=CONNECTIVITY:GRAPHQL_ERROR | errorDescription=GraphQL query returned errors | flowName=shopifyGraphQL-post-subflow | rootCause=' ++ (write(payload.errors, 'application/json') default 'none')]" category="com.company.project"/>
+        <set-variable variableName="graphQLErrors" value="#[payload.errors]" doc:name="Capture GraphQL Errors"/>
         <raise-error type="CONNECTIVITY:GRAPHQL_ERROR" description="GraphQL query failed with errors"/>
       </when>
       <otherwise>
-        <logger level="INFO" message="#['GraphQL query executed successfully']"/>
+        <logger level="INFO" message="#['GraphQL query executed successfully | correlationId=' ++ correlationId]" category="com.company.project"/>
       </otherwise>
     </choice>
-    
-    <logger level="INFO" doc:name="Log End" message="#['[FLOW_END] post-shopify-graph-query-sub']"/>
+
+    <logger level="INFO" doc:name="Log End" message="#['[FLOW_END] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId]" category="com.company.project"/>
+    <error-handler>
+        <on-error-propagate type="ANY">
+            <logger level="ERROR" doc:name="Log Error" message="#['[ERROR] shopifyGraphQL-post-subflow | correlationId=' ++ correlationId ++ ' | errorType=' ++ (error.errorType as String default 'UNKNOWN') ++ ' | errorDescription=' ++ (error.description default '') ++ ' | flowName=shopifyGraphQL-post-subflow | rootCause=' ++ (error.cause.message default 'none')]" category="com.company.project"/>
+        </on-error-propagate>
+    </error-handler>
   </sub-flow>
 
 </mule>
